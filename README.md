@@ -48,7 +48,8 @@ make test
 - [x] Phase 2 — CSV → Postgres ingest (`tedsds ingest-readings`, `tedsds ingest-truth`)
 - [x] Phase 3 — DuckDB feature pipeline (`tedsds features`) with synthetic exact-value test and pandas cross-check on FD001
 - [x] Phase 4 — KMeans for op-modes (`tedsds train-op-modes`, `tedsds features --op-modes-model`)
-- [ ] Phase 5 — RandomForest + LogisticRegression training
+- [x] Phase 5 — RandomForest + LogisticRegression training (`tedsds train-rf`, `tedsds train-lr`) with Postgres model registry
+- [ ] Phase 6 — Standalone evaluator
 - [ ] Phase 6 — Evaluator (confusion matrix, weighted F1)
 - [ ] Phase 7 — Inference CLI + predictions table writer
 

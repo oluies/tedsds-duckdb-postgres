@@ -9,6 +9,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tedsds
+          POSTGRES_PASSWORD: tedsds
+          POSTGRES_DB: tedsds
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tedsds"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_PG_DSN: postgresql://tedsds:tedsds@localhost:5432/tedsds
+
     steps:
       - uses: actions/checkout@v4
 
@@ -33,4 +52,4 @@ jobs:
         run: uv run mypy
 
       - name: Test
-        run: uv run pytest
+        run: uv run pytest -v

@@ -15,7 +15,7 @@ build/
 # Data
 *.parquet
 *.duckdb
-data/
+/data/
 
 # IDE
 .idea/

@@ -8,20 +8,20 @@ WITH base AS (
     SELECT
         id,
         cycle,
-        {%- for col in settings + sensors %}
+{% for col in settings + sensors %}
         {{ col }}{{ "," if not loop.last }}
-        {%- endfor %}
+{% endfor %}
     FROM {{ source }}
     WHERE run_id = '{{ run_id }}'
 ),
-{%- if rul_source == 'train' %}
+{% if rul_source == 'train' %}
 with_rul AS (
     SELECT
         *,
         MAX(cycle) OVER (PARTITION BY id) - cycle AS rul
     FROM base
 ),
-{%- else %}
+{% else %}
 last_test_cycle AS (
     SELECT id, MAX(cycle) AS last_cycle FROM base GROUP BY id
 ),
@@ -35,7 +35,7 @@ with_rul AS (
     SELECT b.*, mc.maxcycle - b.cycle AS rul
     FROM base b JOIN maxcycle mc USING (id)
 ),
-{%- endif %}
+{% endif %}
 labeled AS (
     SELECT
         *,
@@ -48,16 +48,16 @@ labeled AS (
 SELECT
     id,
     cycle,
-    {%- for col in settings + sensors %}
+{% for col in settings + sensors %}
     {{ col }},
-    {%- endfor %}
+{% endfor %}
     rul,
     label1,
     label2
-    {%- for s in sensors %},
-    AVG({{ s }})         OVER w AS a{{ loop.index }},
-    STDDEV_SAMP({{ s }}) OVER w AS sd{{ loop.index }}
-    {%- endfor %}
+{% for s in sensors %}
+    , AVG({{ s }})         OVER w AS a{{ loop.index }}
+    , STDDEV_SAMP({{ s }}) OVER w AS sd{{ loop.index }}
+{% endfor %}
 FROM labeled
 WINDOW w AS (
     PARTITION BY id

@@ -41,18 +41,20 @@ def test_render_window_size_is_parameterised() -> None:
 
 
 @pytest.mark.parametrize("kind", ["train", "test"])
-def test_rendered_sql_parses_in_duckdb(kind: str) -> None:
+@pytest.mark.parametrize("with_op_modes", [False, True])
+def test_rendered_sql_parses_in_duckdb(kind: str, with_op_modes: bool) -> None:
     """In-memory DuckDB parser smoke test — no Postgres required.
 
     We replace the FROM sources with empty inline tables so DuckDB can fully
     parse and bind the query. Catches any syntax bug the rendering may have
-    introduced for either ``train`` or ``test`` mode.
+    introduced across the four (kind, with_op_modes) combinations.
     """
     sql = render_features_sql(
         run_id="X",
         kind=kind,  # type: ignore[arg-type]
         source="readings",
         truth_source="truth",
+        op_modes_source="op_modes" if with_op_modes else None,
     )
 
     con = duckdb.connect(":memory:")
@@ -64,4 +66,6 @@ def test_rendered_sql_parses_in_duckdb(kind: str) -> None:
         + ")"
     )
     con.execute("CREATE TABLE truth (run_id VARCHAR, id INT, rul_at_maxcycle INT)")
+    if with_op_modes:
+        con.execute("CREATE TABLE op_modes (id INT, cycle INT, operationmode BIGINT)")
     con.execute(sql).fetchall()  # parses, binds, runs on empty data

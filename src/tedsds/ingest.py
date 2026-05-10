@@ -95,9 +95,11 @@ def ingest_readings(
         _maybe_load_httpfs(duck, csv_path)
         duck.execute("BEGIN")
         try:
+            # DuckDB's postgres extension emits INSERTs as COPY, which
+            # bypasses column DEFAULTs — supply ``ingested_at`` explicitly.
             duck.execute(
-                "INSERT INTO pg.runs (run_id, dataset, kind, source_uri) "
-                "VALUES ($run_id, $dataset, $kind, $source_uri) "
+                "INSERT INTO pg.runs (run_id, dataset, kind, source_uri, ingested_at) "
+                "VALUES ($run_id, $dataset, $kind, $source_uri, current_timestamp) "
                 "ON CONFLICT (run_id) DO UPDATE SET source_uri = EXCLUDED.source_uri",
                 {
                     "run_id": run_id,

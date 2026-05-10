@@ -46,22 +46,29 @@ labeled AS (
     FROM with_rul
 )
 SELECT
-    id,
-    cycle,
+    labeled.id,
+    labeled.cycle,
 {% for col in settings + sensors %}
-    {{ col }},
+    labeled.{{ col }},
 {% endfor %}
-    rul,
-    label1,
-    label2
+    labeled.rul,
+    labeled.label1,
+    labeled.label2
+{% if op_modes_source %}
+    , om.operationmode
+{% endif %}
 {% for s in sensors %}
-    , AVG({{ s }})         OVER w AS a{{ loop.index }}
-    , STDDEV_SAMP({{ s }}) OVER w AS sd{{ loop.index }}
+    , AVG(labeled.{{ s }})         OVER w AS a{{ loop.index }}
+    , STDDEV_SAMP(labeled.{{ s }}) OVER w AS sd{{ loop.index }}
 {% endfor %}
 FROM labeled
+{% if op_modes_source %}
+LEFT JOIN {{ op_modes_source }} om
+       ON om.id = labeled.id AND om.cycle = labeled.cycle
+{% endif %}
 WINDOW w AS (
-    PARTITION BY id
-    ORDER BY cycle
+    PARTITION BY labeled.id
+    ORDER BY labeled.cycle
     ROWS BETWEEN {{ window_rows - 1 }} PRECEDING AND CURRENT ROW
 )
-ORDER BY id, cycle
+ORDER BY labeled.id, labeled.cycle

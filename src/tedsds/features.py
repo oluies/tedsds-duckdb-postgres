@@ -35,6 +35,7 @@ def render_features_sql(
     source: str = "pg.public.sensor_readings",
     truth_source: str = "pg.public.truth",
     window_rows: int = 5,
+    op_modes_source: str | None = None,
 ) -> str:
     """Render the feature-engineering SQL with the given parameters."""
     template = _jinja_env.get_template("build_features.sql.j2")
@@ -44,6 +45,7 @@ def render_features_sql(
         source=source,
         truth_source=truth_source,
         window_rows=window_rows,
+        op_modes_source=op_modes_source,
         settings=SETTINGS,
         sensors=SENSORS,
     )
@@ -57,13 +59,28 @@ def build_features(
     source: str = "pg.public.sensor_readings",
     truth_source: str = "pg.public.truth",
     window_rows: int = 5,
+    op_modes: pa.Table | None = None,
 ) -> pa.Table:
-    """Run the feature pipeline and return the result as a pyarrow.Table."""
+    """Run the feature pipeline and return the result as a pyarrow.Table.
+
+    If ``op_modes`` is provided (columns ``id, cycle, operationmode``), it is
+    registered as a temporary view and LEFT JOINed onto the output.
+    """
+    op_modes_source: str | None = None
+    if op_modes is not None:
+        con.register("_op_modes_view", op_modes)
+        op_modes_source = "_op_modes_view"
+
     sql = render_features_sql(
         run_id=run_id,
         kind=kind,
         source=source,
         truth_source=truth_source,
         window_rows=window_rows,
+        op_modes_source=op_modes_source,
     )
-    return con.execute(sql).fetch_arrow_table()
+    try:
+        return con.execute(sql).fetch_arrow_table()
+    finally:
+        if op_modes_source is not None:
+            con.unregister(op_modes_source)

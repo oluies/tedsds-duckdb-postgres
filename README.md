@@ -45,8 +45,8 @@ make test
 ## Status
 
 - [x] Phase 1 — repo bootstrap, Postgres schema, Docker, CI, Dependabot
-- [ ] Phase 2 — CSV → Postgres ingest
-- [ ] Phase 3 — DuckDB feature pipeline + parity test vs. Spark golden output
+- [x] Phase 2 — CSV → Postgres ingest (`tedsds ingest-readings`, `tedsds ingest-truth`)
+- [x] Phase 3 — DuckDB feature pipeline (`tedsds features`) with synthetic exact-value test and pandas cross-check on FD001
 - [ ] Phase 4 — KMeans for op-modes
 - [ ] Phase 5 — RandomForest + LogisticRegression training
 - [ ] Phase 6 — Evaluator (confusion matrix, weighted F1)

@@ -26,6 +26,7 @@ tedsds = "tedsds.cli:app"
 dev = [
     "pytest>=8.3.4",
     "pytest-postgresql>=6.1.1",
+    "pytest-timeout>=2.3.1",
     "ruff>=0.8.4",
     "mypy>=1.13.0",
 ]
@@ -50,5 +51,5 @@ strict = true
 files = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "-ra -q"
+addopts = "-ra -q --timeout=120"
 testpaths = ["tests"]

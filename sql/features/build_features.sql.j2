@@ -1,0 +1,67 @@
+-- Feature engineering for tedsds. Renders to plain SQL via Jinja.
+--
+-- Inputs: ``run_id`` (string), ``window_rows`` (int, frame size including current row).
+-- Reads from {{ source }} ; produces a table with:
+--   id, cycle, settings, sensors, rul, label1, label2, a1..a21, sd1..sd21.
+
+WITH base AS (
+    SELECT
+        id,
+        cycle,
+{% for col in settings + sensors %}
+        {{ col }}{{ "," if not loop.last }}
+{% endfor %}
+    FROM {{ source }}
+    WHERE run_id = '{{ run_id }}'
+),
+{% if rul_source == 'train' %}
+with_rul AS (
+    SELECT
+        *,
+        MAX(cycle) OVER (PARTITION BY id) - cycle AS rul
+    FROM base
+),
+{% else %}
+last_test_cycle AS (
+    SELECT id, MAX(cycle) AS last_cycle FROM base GROUP BY id
+),
+maxcycle AS (
+    SELECT t.id, t.rul_at_maxcycle + ltc.last_cycle AS maxcycle
+    FROM {{ truth_source }} t
+    JOIN last_test_cycle ltc USING (id)
+    WHERE t.run_id = '{{ run_id }}'
+),
+with_rul AS (
+    SELECT b.*, mc.maxcycle - b.cycle AS rul
+    FROM base b JOIN maxcycle mc USING (id)
+),
+{% endif %}
+labeled AS (
+    SELECT
+        *,
+        CASE WHEN rul <= 30 THEN 1 ELSE 0 END AS label1,
+        CASE WHEN rul <= 15 THEN 2
+             WHEN rul <= 30 THEN 1
+             ELSE 0 END AS label2
+    FROM with_rul
+)
+SELECT
+    id,
+    cycle,
+{% for col in settings + sensors %}
+    {{ col }},
+{% endfor %}
+    rul,
+    label1,
+    label2
+{% for s in sensors %}
+    , AVG({{ s }})         OVER w AS a{{ loop.index }}
+    , STDDEV_SAMP({{ s }}) OVER w AS sd{{ loop.index }}
+{% endfor %}
+FROM labeled
+WINDOW w AS (
+    PARTITION BY id
+    ORDER BY cycle
+    ROWS BETWEEN {{ window_rows - 1 }} PRECEDING AND CURRENT ROW
+)
+ORDER BY id, cycle

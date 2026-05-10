@@ -263,5 +263,90 @@ def train_lr(
     )
 
 
+@app.command()
+def evaluate(
+    model_id: Annotated[str, typer.Option(help="Registered model UUID")],
+    features: Annotated[Path, typer.Option(help="Features Parquet from `tedsds features`")],
+    label: Annotated[str, typer.Option(help="'label1' or 'label2'")] = "label2",
+    out: Annotated[
+        Path | None, typer.Option(help="Optional JSON path for the metrics dict")
+    ] = None,
+) -> None:
+    """Evaluate a registered model against a features parquet."""
+    if label not in {"label1", "label2"}:
+        raise typer.BadParameter("label must be 'label1' or 'label2'")
+
+    import json
+    import uuid as _uuid
+
+    from tedsds.db import pg_conn
+    from tedsds.evaluate import evaluate_pipeline
+    from tedsds.registry import load_model
+
+    with pg_conn() as conn:
+        stored = load_model(conn, model_id=_uuid.UUID(model_id))
+
+    metrics = evaluate_pipeline(stored.pipeline, features, label=label)  # type: ignore[arg-type]
+    summary = json.dumps(metrics, indent=2)
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(summary)
+    typer.echo(
+        f"model={stored.name} algo={stored.algo} "
+        f"accuracy={metrics['accuracy']:.4f} weighted_f1={metrics['weighted_f1']:.4f} "
+        f"n={metrics['n']}"
+    )
+
+
+@app.command()
+def predict(
+    model_id: Annotated[str, typer.Option(help="Registered model UUID")],
+    features: Annotated[Path, typer.Option(help="Features Parquet from `tedsds features`")],
+    run_id: Annotated[str, typer.Option(help="Run identifier to attribute predictions to")],
+    label: Annotated[
+        str, typer.Option(help="Label column to compare against, if present")
+    ] = "label2",
+    write: Annotated[
+        bool, typer.Option("--write/--no-write", help="Persist to predictions table")
+    ] = True,
+    out: Annotated[Path | None, typer.Option(help="Optional Parquet path for predictions")] = None,
+) -> None:
+    """Run inference with a registered model and write to the predictions table."""
+    if label not in {"label1", "label2"}:
+        raise typer.BadParameter("label must be 'label1' or 'label2'")
+
+    import uuid as _uuid
+
+    import pandas as pd
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from tedsds.db import pg_conn
+    from tedsds.predict import apply_pipeline
+    from tedsds.predictions_table import write_predictions
+    from tedsds.registry import load_model
+
+    with pg_conn() as conn:
+        stored = load_model(conn, model_id=_uuid.UUID(model_id))
+        result = apply_pipeline(stored.pipeline, features, label=label)  # type: ignore[arg-type]
+
+        n_written = 0
+        if write:
+            n_written = write_predictions(conn, result, model_id=stored.model_id, run_id=run_id)
+
+    if out is not None:
+        df = pd.DataFrame({"id": result.ids, "cycle": result.cycles, "label_pred": result.y_pred})
+        if result.proba is not None:
+            for j, cls in enumerate(result.classes):
+                df[f"proba_{int(cls)}"] = result.proba[:, j]
+        out.parent.mkdir(parents=True, exist_ok=True)
+        pq.write_table(pa.Table.from_pandas(df), out)  # type: ignore[no-untyped-call]
+
+    typer.echo(
+        f"predicted {len(result.y_pred)} rows with model {stored.name} "
+        f"(written={n_written}, parquet={'yes' if out else 'no'})"
+    )
+
+
 if __name__ == "__main__":
     app()

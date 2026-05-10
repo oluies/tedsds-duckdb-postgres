@@ -66,4 +66,4 @@ def build_features(
         truth_source=truth_source,
         window_rows=window_rows,
     )
-    return con.execute(sql).arrow()
+    return con.execute(sql).fetch_arrow_table()

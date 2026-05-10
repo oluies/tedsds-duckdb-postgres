@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: demonstrationorg/dhi-postgres:17
     environment:
       POSTGRES_USER: tedsds
       POSTGRES_PASSWORD: tedsds

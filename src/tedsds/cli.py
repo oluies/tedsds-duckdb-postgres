@@ -119,5 +119,149 @@ def train_op_modes(
     typer.echo(f"fitted KMeans(k={k}, seed={seed}) inertia={inertia:.4f} -> {out}")
 
 
+def _persist_classifier(
+    *,
+    name: str,
+    algo: str,
+    params: dict[str, object],
+    result: object,
+    out: Path | None,
+    register: bool,
+    trained_on: str | None,
+) -> None:
+    import json
+
+    import joblib  # type: ignore[import-untyped]
+
+    from tedsds.training import TrainResult
+
+    assert isinstance(result, TrainResult)
+    metrics_summary: dict[str, object] = {"train": result.train_metrics}
+    if result.val_metrics is not None:
+        metrics_summary["val"] = result.val_metrics
+
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(result.pipeline, out)
+        out.with_suffix(out.suffix + ".metrics.json").write_text(
+            json.dumps(metrics_summary, indent=2)
+        )
+
+    if register:
+        if trained_on is None:
+            raise typer.BadParameter("--register requires --trained-on")
+        from tedsds.db import pg_conn
+        from tedsds.registry import save_model
+
+        with pg_conn() as conn:
+            model_id = save_model(
+                conn,
+                name=name,
+                algo=algo,
+                params=params,
+                metrics=metrics_summary,
+                pipeline=result.pipeline,
+                trained_on=trained_on,
+            )
+        typer.echo(f"registered model_id={model_id}")
+
+    train_acc = result.train_metrics["accuracy"]
+    val_line = (
+        "" if result.val_metrics is None else f"  val_accuracy={result.val_metrics['accuracy']:.4f}"
+    )
+    typer.echo(
+        f"trained {algo} train_accuracy={train_acc:.4f}{val_line}  "
+        f"n_train={result.n_train} n_val={result.n_val}"
+    )
+
+
+@app.command()
+def train_rf(
+    features: Annotated[Path, typer.Option(help="Features Parquet from `tedsds features`")],
+    name: Annotated[str, typer.Option(help="Human-readable model name")] = "rf",
+    label: Annotated[str, typer.Option(help="'label1' or 'label2'")] = "label2",
+    n_estimators: Annotated[int, typer.Option()] = 100,
+    max_depth: Annotated[int, typer.Option()] = 10,
+    val_fraction: Annotated[float, typer.Option(help="Validation hold-out fraction")] = 0.2,
+    seed: Annotated[int, typer.Option()] = 42,
+    out: Annotated[Path | None, typer.Option(help="Optional joblib path")] = None,
+    register: Annotated[bool, typer.Option("--register/--no-register")] = False,
+    trained_on: Annotated[str | None, typer.Option(help="run_id for the model registry")] = None,
+) -> None:
+    """Train a RandomForestClassifier."""
+    if label not in {"label1", "label2"}:
+        raise typer.BadParameter("label must be 'label1' or 'label2'")
+
+    from tedsds.train_rf import train
+
+    result = train(
+        features,
+        label=label,  # type: ignore[arg-type]
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        val_fraction=val_fraction,
+        seed=seed,
+    )
+    _persist_classifier(
+        name=name,
+        algo="random_forest",
+        params={
+            "n_estimators": n_estimators,
+            "max_depth": max_depth,
+            "label": label,
+            "seed": seed,
+            "val_fraction": val_fraction,
+        },
+        result=result,
+        out=out,
+        register=register,
+        trained_on=trained_on,
+    )
+
+
+@app.command()
+def train_lr(
+    features: Annotated[Path, typer.Option(help="Features Parquet from `tedsds features`")],
+    name: Annotated[str, typer.Option(help="Human-readable model name")] = "lr",
+    label: Annotated[str, typer.Option(help="'label1' or 'label2'")] = "label2",
+    max_iter: Annotated[int, typer.Option()] = 200,
+    C: Annotated[float, typer.Option(help="Inverse regularisation strength")] = 1.0,
+    val_fraction: Annotated[float, typer.Option(help="Validation hold-out fraction")] = 0.2,
+    seed: Annotated[int, typer.Option()] = 42,
+    out: Annotated[Path | None, typer.Option(help="Optional joblib path")] = None,
+    register: Annotated[bool, typer.Option("--register/--no-register")] = False,
+    trained_on: Annotated[str | None, typer.Option(help="run_id for the model registry")] = None,
+) -> None:
+    """Train a LogisticRegression (LBFGS) classifier."""
+    if label not in {"label1", "label2"}:
+        raise typer.BadParameter("label must be 'label1' or 'label2'")
+
+    from tedsds.train_lr import train
+
+    result = train(
+        features,
+        label=label,  # type: ignore[arg-type]
+        max_iter=max_iter,
+        C=C,
+        val_fraction=val_fraction,
+        seed=seed,
+    )
+    _persist_classifier(
+        name=name,
+        algo="logistic_regression",
+        params={
+            "max_iter": max_iter,
+            "C": C,
+            "label": label,
+            "seed": seed,
+            "val_fraction": val_fraction,
+        },
+        result=result,
+        out=out,
+        register=register,
+        trained_on=trained_on,
+    )
+
+
 if __name__ == "__main__":
     app()

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "Europe/Stockholm",
+  "prConcurrentLimit": 10,
+  "packageRules": [
+    {
+      "description": "Was the pip ecosystem in .github/dependabot.yml: weekly, open-pull-requests-limit 10.",
+      "matchManagers": ["pip_requirements", "pip-compile", "pep621"],
+      "groupName": "python dependencies"
+    },
+    {
+      "description": "Was the github-actions ecosystem: weekly, limit 5. Grouped into one PR to cut churn.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "Was the docker ecosystem: weekly, limit 5.",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "groupName": "docker images"
+    }
+  ]
+}
